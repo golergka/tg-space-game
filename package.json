@@ -11,5 +11,9 @@
   "devDependencies": {
     "@types/node": "^9.4.7",
     "typescript": "^2.7.2"
+  },
+  "dependencies": {
+    "@types/node-telegram-bot-api": "^0.28.2",
+    "node-telegram-bot-api": "^0.30.0"
   }
 }
