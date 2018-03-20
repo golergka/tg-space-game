@@ -1,25 +1,22 @@
 import { Connection } from "typeorm"
 import TelegramBot from "node-telegram-bot-api"
-import User from "./models/user"
+import {User, UserRepository} from "./models/user"
+import { StarSystemRepository } from "./models/starSystem";
 
 export default class Db {
 
     readonly connection: Connection
+    readonly userRepository: UserRepository
+    readonly starSystemRepository: StarSystemRepository
 
     public constructor(connection: Connection) {
         this.connection = connection
+        this.userRepository = new UserRepository(connection)
+        this.starSystemRepository = new StarSystemRepository(connection)
     }
 
     public rememberUser = async (message: TelegramBot.Message) => {
-        const chatId = message.chat.id;
-        const userRepository = this.connection.getRepository(User)
-        const oldUser = await userRepository.findOne({ chatId: chatId})
-
-        if (!oldUser)
-        {
-            const newUser = userRepository.create({ chatId: chatId })
-            userRepository.save(newUser)
-        }
+        this.userRepository.rememberUser(message.chat.id)
     }
 
 }
