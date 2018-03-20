@@ -14,6 +14,9 @@
   },
   "dependencies": {
     "@types/node-telegram-bot-api": "^0.28.2",
-    "node-telegram-bot-api": "^0.30.0"
+    "node-telegram-bot-api": "^0.30.0",
+    "reflect-metadata": "^0.1.12",
+    "sqlite3": "^4.0.0",
+    "typeorm": "^0.1.16"
   }
 }
