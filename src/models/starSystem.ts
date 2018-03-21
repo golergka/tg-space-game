@@ -1,13 +1,33 @@
-import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, BaseEntity, Connection, Repository} from "typeorm"
+import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, BaseEntity, Connection, Repository, ManyToMany} from "typeorm"
 import {User} from "./user";
+import { StartPollingOptions } from "node-telegram-bot-api";
+import Coord from "./coord";
+import { StarSegment } from "./starSegment";
+const pd = require("probability-distributions")
+
+@Entity()
+class StarSystemProfile {
+
+    public constructor() {
+        this.expectedNeighbours = 3
+    }
+
+    @PrimaryGeneratedColumn()
+    id?: number
+
+    @Column()
+    expectedNeighbours: number
+}
 
 @Entity()
 export class StarSystem {
 
     public constructor() {
         this.name = ""
-        this.users = []
         this.neigboursGenerated = false
+        this.coord = new Coord()
+        this.occupants = []
+        this.neighbourSegments = []
     }
 
     @PrimaryGeneratedColumn()
@@ -19,8 +39,14 @@ export class StarSystem {
     @Column()
     name: string
 
+    @Column(type => Coord)
+    coord: Coord
+
     @OneToMany(type => User, user => user.system)
-    users: User[]
+    occupants: User[]
+
+    @ManyToMany(type => StarSegment, starSegment => starSegment.neighbourSegments)
+    neighbourSegments: StarSegment[]
 
 }
 
@@ -227,21 +253,7 @@ export class StarSystemRepository {
     }
 
     private static poisson1based(expectation: number): number {
-        return this.poisson(expectation - 1) + 1
-    }
-
-    // https://en.wikipedia.org/wiki/Poisson_distribution#Generating_Poisson-distributed_random_variables
-    private static poisson(lambda: number): number {
-        let k = 0
-        let l = Math.exp(-lambda)
-        let p = 1
-        do {
-            k = k + 1
-            const u = Math.random()
-            p = p * u
-        }
-        while (p > l)
-        return k - 1;
+        return pd.rpois(1, expectation - 1)[0] + 1
     }
 
     readonly repository: Repository<StarSystem>
@@ -250,9 +262,45 @@ export class StarSystemRepository {
     public constructor(connection: Connection) {
         this.repository = connection.getRepository(StarSystem)
         this.generateName = StarSystemRepository.generateNameGenerator()
-
-        for(let i = 0; i < 100; i++)
-            console.log("What an awesome name", this.generateName())
     }
+
+    private async generateStarSystem(coord: Coord): Promise<StarSystem> {
+        const starSystem = this.repository.create()
+        starSystem.coord = coord
+        starSystem.name = this.generateName()
+        this.repository.save(starSystem)
+        return starSystem
+    }
+
+    public async seed(x: number, y: number, z: number) {
+
+    }
+
+    segment(coord: number): [number, number] {
+        const low = Math.floor(coord)
+        let high = Math.ceil(coord)
+        if (high == low)
+            high++
+        return [low, high]
+    }
+
+    /*
+    sector(x: number, y:number , z: number): Promise<StarSystem[]> {
+        const xSegment = this.segment(x)
+        const ySegment = this.segment(y)
+        const zSegment = this.segment(z)
+        
+        return this.repository
+            .createQueryBuilder("starSystem")
+            .select()
+            .andWhere("user.xCoord >= :xMin AND user.xCoord < :xMax", 
+                { xMin: xSegment["0"], xMax: xSegment["1"]})
+            .andWhere("user.yCoord >= :yMin AND user.yCoord < :yMay", 
+                { yMin: ySegment["0"], yMay: ySegment["1"]})
+            .andWhere("user.zCoord >= :zMin AND user.zCoord < :zMaz", 
+                { zMin: zSegment["0"], zMaz: zSegment["1"]})
+            .getMany()
+    }
+    */
 
 }

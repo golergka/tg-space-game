@@ -18,7 +18,7 @@ export class User {
     @Column()
     fuel: number
 
-    @ManyToOne(type => StarSystem, starSystem => starSystem.users, { eager: true })
+    @ManyToOne(type => StarSystem, starSystem => starSystem.occupants, { eager: true })
     system?: StarSystem
 }
 
