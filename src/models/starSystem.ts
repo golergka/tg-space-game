@@ -1,4 +1,4 @@
-import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, BaseEntity, Connection, Repository, ManyToMany} from "typeorm"
+import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, BaseEntity, Connection, Repository, ManyToMany, EntityRepository} from "typeorm"
 import {User} from "./user";
 import { StartPollingOptions } from "node-telegram-bot-api";
 import Coord from "./coord";
@@ -25,7 +25,7 @@ export class StarSystem {
     public constructor() {
         this.name = ""
         this.neigboursGenerated = false
-        this.coord = new Coord()
+        this.position = new Coord()
         this.occupants = []
         this.neighbourSegments = []
     }
@@ -34,23 +34,26 @@ export class StarSystem {
     id?: number
 
     @Column()
-    neigboursGenerated: boolean
-
-    @Column()
     name: string
 
     @Column(type => Coord)
-    coord: Coord
+    position: Coord
+
+    @ManyToOne(type => StarSegment, starSegment => starSegment.childrenSystems)
+    parentSegment?: StarSegment
 
     @OneToMany(type => User, user => user.system)
     occupants: User[]
 
+    /*
     @ManyToMany(type => StarSegment, starSegment => starSegment.neighbourSegments)
     neighbourSegments: StarSegment[]
+    */
 
 }
 
-export class StarSystemRepository {
+@EntityRepository(StarSystem)
+export class StarSystemRepository extends Repository<StarSystem> {
 
     static readonly greekPrefixes: string[] = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ϑ", "ι", "κ", "λ"]
     static readonly constellations: string[] = [
@@ -256,20 +259,22 @@ export class StarSystemRepository {
         return pd.rpois(1, expectation - 1)[0] + 1
     }
 
-    readonly repository: Repository<StarSystem>
     readonly generateName: () => string
     
     public constructor(connection: Connection) {
-        this.repository = connection.getRepository(StarSystem)
+        super()
         this.generateName = StarSystemRepository.generateNameGenerator()
     }
 
-    private async generateStarSystem(coord: Coord): Promise<StarSystem> {
-        const starSystem = this.repository.create()
-        starSystem.coord = coord
+    /**
+     * Generates a new random star system
+     * @param position position of the star system
+     */
+    public async generateStarSystem(position: Coord): Promise<StarSystem> {
+        const starSystem = this.create()
+        starSystem.position = position
         starSystem.name = this.generateName()
-        this.repository.save(starSystem)
-        return starSystem
+        return this.save(starSystem)
     }
 
     public async seed(x: number, y: number, z: number) {

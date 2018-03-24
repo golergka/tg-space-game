@@ -15,6 +15,7 @@
   "dependencies": {
     "@types/node-telegram-bot-api": "^0.28.2",
     "node-telegram-bot-api": "^0.30.0",
+    "pg": "^7.4.1",
     "probability-distributions": "^0.9.1",
     "reflect-metadata": "^0.1.12",
     "sqlite3": "^4.0.0",

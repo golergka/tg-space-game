@@ -8,25 +8,30 @@ export default class Coord {
         y = y && y || 0
         z = z && z || 0
 
-        this.x = 0, this.y = 0, this.z = 0
+        this.x = x, this.y = y, this.z = z
     }
 
-    @Column()
+    @Column("float8")
     x: number
 
-    @Column()
+    @Column("float8")
     y: number
 
-    @Column()
+    @Column("float8")
     z: number
 
-    public multiply(factor: number): Coord {
-        return new Coord(this.x * factor, this.y * factor, this.z * factor)
+    public static multiply(coord: Coord, factor: number): Coord {
+        return new Coord(coord.x * factor, coord.y * factor, coord.z * factor)
+    }
+
+    public static add(a: Coord, b: Coord): Coord {
+        return new Coord(a.x + b.x, a.y + b.y, a.z + b.z)
     }
 
     public static randomUnitSphere(): Coord {
         const base = pd.rnorm(3)
         const m = 1 / Math.sqrt(Math.pow(base[0], 2) + Math.pow(base[1], 2) + Math.pow(base[2], 2))
-        return new Coord(base[0] * m, base[1] * m, base[2] * m)
+        const result = new Coord(base[0] * m, base[1] * m, base[2] * m)
+        return result
     }
 }
