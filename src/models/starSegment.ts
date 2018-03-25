@@ -39,9 +39,19 @@ export class StarSegment {
     @Column("real")
     expectedLinks: number = 0
 
-    public get linkProbability(): number {
-        return this.expectedLinks / 
-            Math.pow(this.expectedStars, 2)
+    static uniquePairs(stars: number): number {
+        return stars * (stars - 1) / 2
+    }
+
+    /**
+     * Probability that two random stars will be connected
+     */
+    static pairLinkProbability(links: number, stars: number): number {
+        return links / StarSegment.uniquePairs(stars)
+    }
+
+    static expectLinks(pairLinkP: number, stars: number): number {
+        return pairLinkP * StarSegment.uniquePairs(stars)
     }
 
     @Column(type => Coord)
@@ -128,29 +138,31 @@ export class StarSegment {
     @Transaction()
     public async tryGenerateChildren(@TransactionManager() manager: EntityManager) {
 
-        const childrenAmount = 4
+        const childAmount = 4
         if (this.generatedChildren)
             return
 
         // How many stars we expect in each of the subsegments
-        const subExpectedStars = this.expectedStars / childrenAmount
+        const childExpectedStars = this.expectedStars / childAmount
 
         const segmentRepository = manager.getRepository(StarSegment)
 
         // Generate sub-segments
-        if (subExpectedStars >= 2)
+        if (childExpectedStars >= 2)
         {
             // How many links between different sub segments we expect
-            const interExpectedLinks = this.linkProbability * Math.pow(subExpectedStars, 2)
+            const pairLinkP = StarSegment.pairLinkProbability(this.expectedLinks, this.expectedStars)
+            const childExpectedLinks = StarSegment.expectLinks(pairLinkP, childExpectedStars)
+            const interExpectedLinks = this.expectedLinks - childExpectedLinks * childAmount
 
             let children: StarSegment[] = []
 
-            for(let i = 0; i < childrenAmount; i++) {
+            for(let i = 0; i < childAmount; i++) {
                 const newSegment = await segmentRepository.create()
                 newSegment.position = this.generateChildPosition()
-                newSegment.expectedLinks = (this.expectedLinks - interExpectedLinks) / childrenAmount
-                newSegment.expectedRadius = this.expectedRadius / Math.cbrt(childrenAmount)
-                newSegment.expectedStars = subExpectedStars
+                newSegment.expectedLinks = childExpectedLinks
+                newSegment.expectedRadius = this.expectedRadius / Math.cbrt(childAmount)
+                newSegment.expectedStars = childExpectedStars
                 newSegment.parent = this
                 children.push(newSegment)
             }
@@ -160,7 +172,7 @@ export class StarSegment {
             await Promise.all(children.map(s => segmentRepository.save(s)))
 
             // We want our children connectivity NOT to follow Gauss' distribution
-            const childWeights = pd.rexp(childrenAmount)
+            const childWeights = pd.rexp(childAmount)
             const pairs = this.generateLinks(children, interExpectedLinks, childWeights)
             const linkRepository = manager.getRepository(StarLink)
             const links: StarLink[] = []

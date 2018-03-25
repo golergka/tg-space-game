@@ -22,7 +22,7 @@ createConnection({
     username: "maxyankov",
     database: "maxyankov",
     entities: ["dist/models/**/*.js"],
-    logging: true,
+    //logging: true,
     synchronize: true,
     dropSchema: true
 }).then(async (connection: Connection) => {
@@ -33,8 +33,8 @@ createConnection({
 
     let iterator: StarSegment|null = starSegmentRepository.create()
     iterator.expectedRadius = 10
-    iterator.expectedStars = 1000
-    iterator.expectedLinks = 10000
+    iterator.expectedStars = 100
+    iterator.expectedLinks = 1000
     await starSegmentRepository.save(iterator)
 
     while(iterator != null)
