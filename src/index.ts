@@ -32,8 +32,9 @@ createConnection({
     const starSegmentRepository = connection.getTreeRepository(StarSegment)
 
     let iterator: StarSegment|null = starSegmentRepository.create()
-    iterator.expectedRadius = 1000
-    iterator.expectedStars = 1000000
+    iterator.expectedRadius = 10
+    iterator.expectedStars = 1000
+    iterator.expectedLinks = 10000
     await starSegmentRepository.save(iterator)
 
     while(iterator != null)
@@ -47,6 +48,7 @@ createConnection({
 
     const db = new Db(connection)
 
+    /*
     const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
     bot.on('polling_error', (error: Error) => {
@@ -56,4 +58,5 @@ createConnection({
     bot.on('message', db.rememberUser)
 
     const echo = new Echo(bot, db);
+    */
 })

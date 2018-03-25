@@ -11,13 +11,13 @@ export default class Coord {
         this.x = x, this.y = y, this.z = z
     }
 
-    @Column("float8")
+    @Column("real")
     x: number
 
-    @Column("float8")
+    @Column("real")
     y: number
 
-    @Column("float8")
+    @Column("real")
     z: number
 
     public static multiply(coord: Coord, factor: number): Coord {
