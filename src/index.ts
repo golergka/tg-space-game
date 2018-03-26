@@ -32,18 +32,19 @@ createConnection({
     const starSegmentRepository = connection.getTreeRepository(StarSegment)
 
     let iterator: StarSegment|null = starSegmentRepository.create()
-    iterator.expectedRadius = 10
-    iterator.expectedStars = 100
-    iterator.expectedLinks = 1000
+    iterator.expectedRadius = 20000
+    iterator.expectedStars = 1e10
     await starSegmentRepository.save(iterator)
 
     while(iterator != null)
     {
+        console.log("Generating segment " + iterator.id! + " with " + iterator.expectedStars + " stars")
         await iterator.tryGenerateChildren.apply(iterator)
         if (iterator.childrenSegments.length > 0)
             iterator = iterator.childrenSegments[0]
         else
             iterator = null
+        console.log("Done")
     }
 
     const db = new Db(connection)
