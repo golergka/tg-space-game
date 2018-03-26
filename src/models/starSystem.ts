@@ -38,6 +38,22 @@ export class StarSystem {
     @OneToMany(type => User, user => user.system)
     occupants?: Promise<User[]>
 
+    public async pushOccupant(u: User) {
+        const occupants = await this.occupants!
+        occupants.push(u)
+        this.occupants = Promise.resolve(occupants)
+    }
+
+    public async tryRemoveOccupant(u: User): Promise<boolean> {
+        const occupants = await this.occupants!
+        const index = occupants.indexOf(u)
+        if (index == -1)
+            return false
+        occupants.splice(index)
+        this.occupants = Promise.resolve(occupants)
+        return true
+    }
+
     /**
      * Links where this system is side A
      */
@@ -49,6 +65,16 @@ export class StarSystem {
      */
     @OneToMany(type => StarLink, link => link.systemB, { eager: true})
     linksB?: StarLink[]
+
+    public totalLinkCount(): number {
+        let result = 0
+        if (this.linksA)
+            result += this.linksA!.length
+        if (this.linksB)
+            result += this.linksB.length
+        return result
+    }
+
 }
 
 @EntityRepository(StarSystem)

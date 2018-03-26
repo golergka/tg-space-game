@@ -8,7 +8,7 @@ export default class Echo extends Command {
         super("echo", bot, db)
     }
 
-    invoke(msg: TelegramBot.Message, match: RegExpExecArray|null): void {
+    async invoke(msg: TelegramBot.Message, match: RegExpExecArray|null): Promise<void> {
         const chatId = msg.chat.id;
         if (match)
         {

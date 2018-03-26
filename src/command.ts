@@ -12,9 +12,9 @@ export default abstract class Command {
         this.db = db
         this.name = name
 
-        const regex = new RegExp(name + " (.+)");
+        const regex = new RegExp("/" + name + "( (.+))*");
         this.bot.onText(regex, this.invoke.bind(this));
     }
 
-    abstract invoke(msg: TelegramBot.Message, match: RegExpExecArray|null): void;
+    abstract async invoke(msg: TelegramBot.Message, match: RegExpExecArray|null): Promise<void>;
 }
