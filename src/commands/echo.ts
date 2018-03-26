@@ -1,6 +1,6 @@
 import TelegramBot from "node-telegram-bot-api"
 import Command from "../command"
-import Db from "../db";
+import { Db, CommandContext } from "../db";
 
 export default class Echo extends Command {
 
@@ -8,7 +8,11 @@ export default class Echo extends Command {
         super("echo", bot, db)
     }
 
-    async invoke(msg: TelegramBot.Message, match: RegExpExecArray|null): Promise<void> {
+    async invoke(
+        msg: TelegramBot.Message, 
+        match: RegExpExecArray|null, 
+        context: CommandContext
+    ): Promise<void> {
         const chatId = msg.chat.id;
         if (match)
         {

@@ -2,8 +2,9 @@ import { Connection, EntityManager } from "typeorm"
 import TelegramBot from "node-telegram-bot-api"
 import {User, UserRepository} from "./models/user"
 import { StarSystemRepository, StarSystem } from "./models/starSystem";
+import Command from "./command";
 
-export default class Db {
+export class Db {
 
     readonly connection: Connection
     readonly startId: number
@@ -13,10 +14,17 @@ export default class Db {
         this.startId = startSystem.id!
     }
 
-    public rememberUser = async (message: TelegramBot.Message) => {
-        if (await this.getUser(message))
-            return
-        await this.connection.transaction(async (entityManager: EntityManager) => {
+    private tryGetUser = async (message: TelegramBot.Message): Promise<User|undefined> => {
+        const username = message.from!.username
+        const userRepository = this.connection.getCustomRepository(UserRepository)
+        return await userRepository.findOne({ username: username })
+    }
+
+    private getOrGenerateUser = async (message: TelegramBot.Message): Promise<User> => {
+        const oldUser = await this.tryGetUser(message)
+        if (oldUser)
+            return oldUser!
+        return this.connection.transaction(async (entityManager: EntityManager) => {
             const userRepository = entityManager.getCustomRepository(UserRepository)
             
             // Create new user
@@ -32,18 +40,27 @@ export default class Db {
             
             await systemRepository.save(startSystem!)
             await userRepository.save(newUser)
+
+            return newUser
         })
     }
 
-    public getUser = async (message: TelegramBot.Message): Promise<User|undefined> => {
-        const username = message.from!.username
-        const userRepository = this.connection.getCustomRepository(UserRepository)
-        return await userRepository.findOne({ username: username })
-    }
-
     public getLocation = async (message: TelegramBot.Message): Promise<StarSystem> => {
-        const user = await this.getUser(message)
+        const user = await this.tryGetUser(message)
         return await user!.system!
     }
 
+    public getContext = async (message: TelegramBot.Message): Promise<CommandContext> => {
+        const user = await this.getOrGenerateUser(message)
+        return new CommandContext(user)
+    }
+
+}
+
+export class CommandContext {
+    public readonly user: User
+
+    public constructor(user: User) {
+        this.user = user
+    }
 }

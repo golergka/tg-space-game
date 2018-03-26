@@ -1,4 +1,4 @@
-import Db from "./db"
+import { Db, CommandContext } from "./db"
 import TelegramBot from "node-telegram-bot-api"
 
 export default abstract class Command {
@@ -13,8 +13,15 @@ export default abstract class Command {
         this.name = name
 
         const regex = new RegExp("/" + name + "( (.+))*");
-        this.bot.onText(regex, this.invoke.bind(this));
+        this.bot.onText(regex, async (msg: TelegramBot.Message, match: RegExpExecArray|null) => {
+            const context = await db.getContext(msg)
+            this.invoke.bind(this)(msg, match, context)
+        });
     }
 
-    abstract async invoke(msg: TelegramBot.Message, match: RegExpExecArray|null): Promise<void>;
+    abstract async invoke(
+        msg: TelegramBot.Message, 
+        match: RegExpExecArray|null,
+        context: CommandContext
+    ): Promise<void>;
 }

@@ -1,10 +1,12 @@
 import "reflect-metadata"
 import TelegramBot from "node-telegram-bot-api"
 import {createConnection, Connection} from "typeorm"
-import Db from "./db"
+import { Db } from "./db"
 import Echo from "./commands/echo"
 import { StarSegment } from "./models/starSegment";
 import Look from "./commands/look";
+
+process.on('unhandledRejection', up => { throw up })
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || "180445993:AAHghLnBrO-e5HgD-1X_J9V1XBQ_qwslpL4";
 console.log("TELEGRAM_TOKEN: " + TELEGRAM_TOKEN)
@@ -38,6 +40,7 @@ createConnection({
     //iterator.expectedStars = 1e10
     await starSegmentRepository.save(iterator)
 
+    // Generating down to the start system
     while(!iterator.generatedChildren)
     {
         console.log("Generating segment " + iterator.id! + " with " + iterator.expectedStars + " stars")
@@ -52,6 +55,7 @@ createConnection({
         console.log("Done")
     }
 
+    // Finding start system
     const systems = await iterator.childrenSystems!
     const sortedSystems = systems.sort((a, b) => b.totalLinkCount() - a.totalLinkCount())
     for (const s of systems)
@@ -60,6 +64,7 @@ createConnection({
     const startSystem = sortedSystems[0]
     console.log("Start system: " + startSystem)
 
+    // Creating db and commands
     const db = new Db(connection, startSystem!)
 
     const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
@@ -67,8 +72,6 @@ createConnection({
     bot.on('polling_error', (error: Error) => {
         console.log(error)
     });
-
-    bot.on('message', db.rememberUser)
 
     const echo = new Echo(bot, db)
     const look = new Look(bot, db)

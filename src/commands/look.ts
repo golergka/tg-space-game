@@ -1,6 +1,6 @@
 import TelegramBot from "node-telegram-bot-api"
 import Command from "../command";
-import Db from "../db";
+import { Db, CommandContext } from "../db";
 
 export default class Look extends Command {
 
@@ -8,11 +8,15 @@ export default class Look extends Command {
         super("look", bot, db)
     }
 
-    async invoke(msg: TelegramBot.Message, match: RegExpExecArray|null): Promise<void> {
-        const location = await this.db.getLocation(msg)
+    async invoke(
+        msg: TelegramBot.Message, 
+        match: RegExpExecArray|null,
+        context: CommandContext
+    ): Promise<void> {
+        const system = await context.user.system!
         this.bot.sendMessage(
             msg.chat.id, 
-            "You are at system " + location.name + "\n")
+            "You are at system " + system.name + "\n")
 
     }
 }
