@@ -3,6 +3,7 @@ import {User} from "./user";
 import { StartPollingOptions } from "node-telegram-bot-api";
 import Coord from "./coord";
 import { StarSegment } from "./starSegment";
+import { StarLink } from "./starLink";
 const pd = require("probability-distributions")
 
 @Entity()
@@ -22,34 +23,32 @@ class StarSystemProfile {
 @Entity()
 export class StarSystem {
 
-    public constructor() {
-        this.name = ""
-        this.neigboursGenerated = false
-        this.position = new Coord()
-        this.occupants = []
-        this.neighbourSegments = []
-    }
-
     @PrimaryGeneratedColumn()
     id?: number
 
     @Column()
-    name: string
+    name: string = ""
 
     @Column(type => Coord)
-    position: Coord
+    position: Coord = new Coord()
 
     @ManyToOne(type => StarSegment, starSegment => starSegment.childrenSystems)
-    parentSegment?: StarSegment
+    parentSegment?: Promise<StarSegment>
 
     @OneToMany(type => User, user => user.system)
-    occupants: User[]
+    occupants?: Promise<User[]>
 
-    /*
-    @ManyToMany(type => StarSegment, starSegment => starSegment.neighbourSegments)
-    neighbourSegments: StarSegment[]
-    */
+    /**
+     * Links where this system is side A
+     */
+    @OneToMany(type => StarLink, link => link.systemA, { eager: true})
+    linksA?: StarLink[]
 
+    /**
+     * Links where this system is side B
+     */
+    @OneToMany(type => StarLink, link => link.systemB, { eager: true})
+    linksB?: StarLink[]
 }
 
 @EntityRepository(StarSystem)
@@ -270,42 +269,12 @@ export class StarSystemRepository extends Repository<StarSystem> {
      * Generates a new random star system
      * @param position position of the star system
      */
-    public async generateStarSystem(position: Coord): Promise<StarSystem> {
+    public async generateStarSystem(position: Coord, segment: StarSegment): Promise<StarSystem> {
         const starSystem = this.create()
         starSystem.position = position
         starSystem.name = this.generateName()
+        starSystem.parentSegment = Promise.resolve(segment)
         return this.save(starSystem)
     }
-
-    public async seed(x: number, y: number, z: number) {
-
-    }
-
-    segment(coord: number): [number, number] {
-        const low = Math.floor(coord)
-        let high = Math.ceil(coord)
-        if (high == low)
-            high++
-        return [low, high]
-    }
-
-    /*
-    sector(x: number, y:number , z: number): Promise<StarSystem[]> {
-        const xSegment = this.segment(x)
-        const ySegment = this.segment(y)
-        const zSegment = this.segment(z)
-        
-        return this.repository
-            .createQueryBuilder("starSystem")
-            .select()
-            .andWhere("user.xCoord >= :xMin AND user.xCoord < :xMax", 
-                { xMin: xSegment["0"], xMax: xSegment["1"]})
-            .andWhere("user.yCoord >= :yMin AND user.yCoord < :yMay", 
-                { yMin: ySegment["0"], yMay: ySegment["1"]})
-            .andWhere("user.zCoord >= :zMin AND user.zCoord < :zMaz", 
-                { zMin: zSegment["0"], zMaz: zSegment["1"]})
-            .getMany()
-    }
-    */
 
 }

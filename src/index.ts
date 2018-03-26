@@ -40,10 +40,19 @@ createConnection({
     {
         console.log("Generating segment " + iterator.id! + " with " + iterator.expectedStars + " stars")
         await iterator.tryGenerateChildren.apply(iterator)
-        if (iterator.childrenSegments.length > 0)
-            iterator = iterator.childrenSegments[0]
+        const children: StarSegment[] = await iterator.childrenSegments!
+        if (children.length > 0)
+        {
+            const sortedChildren = children.sort((a, b) => b.totalLinkCount() - a.totalLinkCount())
+            for (const s of sortedChildren) {
+                console.log("Child segment " + s.id! + " has " + s.totalLinkCount() + " links")
+            }
+            iterator = sortedChildren[0]
+        }
         else
+        {
             iterator = null
+        }
         console.log("Done")
     }
 

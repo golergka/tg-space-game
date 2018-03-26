@@ -16,13 +16,13 @@ export class StarSegment {
     id?: number
 
     @TreeParent()
-    parent?: StarSegment
+    parent?: Promise<StarSegment>
 
     @TreeChildren()
-    childrenSegments: StarSegment[] = []
+    childrenSegments?: Promise<StarSegment[]>
 
     @OneToMany(type => StarSystem, starSystem => starSystem.parentSegment)
-    childrenSystems: StarSystem[] = []
+    childrenSystems?: Promise<StarSystem[]>
 
     @Column()
     generatedChildren: boolean = false
@@ -47,6 +47,15 @@ export class StarSegment {
      */
     @OneToMany(type => StarLink, link => link.segmentB, { eager: true})
     linksB?: StarLink[]
+
+    public totalLinkCount(): number {
+        let result = 0
+        if (this.linksA)
+            result += this.linksA!.length
+        if (this.linksB)
+            result += this.linksB.length
+        return result
+    }
 
     /**
      * Generates random position for a child segment or a star
@@ -83,14 +92,13 @@ export class StarSegment {
         }
 
         // Extra links
-        const maxLinks = elements.length * (elements.length - 1)
-        const extraLinks = Math.floor(Math.max(linkAmount - minLinks, maxLinks))
+        const maxLinks = elements.length * (elements.length - 1) / 2
+        const extraLinks = Math.floor(Math.max(linkAmount, maxLinks)) - minLinks
         const isValidLink = function(x: T, y: T): boolean {
             if (x === y)
                 return false
-            return !unique ||
-                (links.indexOf([x, y]) == -1 && 
-                links.indexOf([y, x]) == -1)
+            return !unique 
+                || links.findIndex(p => (p[0] === x && p[1] === y) || (p[0] === y && p[1] === x)) == -1
         }
         if (extraLinks > 0)
         {
@@ -101,10 +109,7 @@ export class StarSegment {
                 do {
                     y = pd.sample(elements, 1, true, weights)[0]
                     attempts ++
-                    if (attempts > 100) {
-                        console.log("Can't generate unique neighbour!")
-                        continue fromLoop
-                    }
+                    if (attempts > 100) continue fromLoop
                 } while (!isValidLink(x, y))
                 links.push([x, y])
             }
@@ -117,88 +122,96 @@ export class StarSegment {
     @Transaction()
     public async tryGenerateChildren(@TransactionManager() manager: EntityManager) {
 
-        const childAmount = 10
+        const subsegmentAmount = 10
         if (this.generatedChildren)
             return
 
         // How many stars we expect in each of the subsegments
-        const childStars = this.expectedStars / childAmount
+        const childStars = this.expectedStars / subsegmentAmount
+        const expectedLinks = Math.min(100, this.expectedStars * 4)
 
         const segmentRepository = manager.getRepository(StarSegment)
+        const linkRepository = manager.getRepository(StarLink)
 
         // Generate sub-segments
         if (childStars >= 2)
         {
             // How many links between different sub segments we expect
-            const childRadius = this.expectedRadius / Math.cbrt(childAmount)
-            const expectedLinks = Math.min(100, this.expectedStars * 4)
+            const childRadius = this.expectedRadius / Math.cbrt(subsegmentAmount)
 
-            let children: StarSegment[] = []
+            const children: StarSegment[] = []
 
-            for(let i = 0; i < childAmount; i++) {
-                const newSegment = await segmentRepository.create()
-                newSegment.position = this.generateChildPosition()
-                newSegment.expectedRadius = childRadius
-                newSegment.expectedStars = childStars
-                newSegment.parent = this
-                children.push(newSegment)
+            // Generate sub-segments themselves
+            {
+                for(let i = 0; i < subsegmentAmount; i++) {
+                    const newSegment = await segmentRepository.create()
+                    newSegment.position = this.generateChildPosition()
+                    newSegment.expectedRadius = childRadius
+                    newSegment.expectedStars = childStars
+                    newSegment.parent = Promise.resolve(this)
+                    children.push(newSegment)
+                }
+                this.childrenSegments = Promise.resolve(children)
+
+                // Save child segments
+                await Promise.all(children.map(s => segmentRepository.save(s)))
             }
-            this.childrenSegments = children
-
-            // Save child segments
-            await Promise.all(children.map(s => segmentRepository.save(s)))
 
             // We want our children connectivity NOT to follow Gauss' distribution
-            const childWeights = pd.rexp(childAmount)
-            const pairs = this.generateLinks(children, expectedLinks, childWeights)
-            const linkRepository = manager.getRepository(StarLink)
-            const links: StarLink[] = []
-            for (const p of pairs) {
-                const newLink = linkRepository.create()
-                newLink.segmentA = Promise.resolve(p[0])
-                newLink.segmentB = Promise.resolve(p[1])
-                p[0].linksA = p[0].linksA || []
-                p[1].linksB = p[1].linksB || []
-                p[0].linksA!.push(newLink)
-                p[1].linksB!.push(newLink)
-                links.push(newLink)
-            }
+            const childWeights = pd.rexp(subsegmentAmount)
 
-            // Save all generated links
-            await Promise.all(links.map(l => linkRepository.save(l)))
+            // Generate links between sub-segments
+            {
+                const pairs = this.generateLinks(children, expectedLinks, childWeights)
+                const links: StarLink[] = []
+                for (const p of pairs) {
+                    const newLink = linkRepository.create()
+                    newLink.segmentA = Promise.resolve(p[0])
+                    newLink.segmentB = Promise.resolve(p[1])
+                    p[0].linksA = p[0].linksA || []
+                    p[1].linksB = p[1].linksB || []
+                    p[0].linksA!.push(newLink)
+                    p[1].linksB!.push(newLink)
+                    links.push(newLink)
+                }
+
+                // Save all generated links
+                await Promise.all(links.map(l => linkRepository.save(l)))
+            }
             
             // Re-delegate all links from parent to children
-            let subLinks: StarLink[] = []
-            if (this.linksA)
             {
-                const linkASubs: StarSegment[] = pd.sample(children, this.linksA!.length, true, childWeights)
-                for(let i = 0; i < this.linksA!.length; i++) {
-                    const link: StarLink = this.linksA![i]
-                    const sub = linkASubs[i]
-                    link.segmentA = Promise.resolve(sub)
-                    sub.linksA = sub.linksA || []
-                    sub.linksA!.push(link)
+                let subLinks: StarLink[] = []
+                if (this.linksA) {
+                    const linkASubs: StarSegment[] = pd.sample(children, this.linksA!.length, true, childWeights)
+                    for(let i = 0; i < this.linksA!.length; i++) {
+                        const link: StarLink = this.linksA![i]
+                        const sub = linkASubs[i]
+                        link.segmentA = Promise.resolve(sub)
+                        sub.linksA = sub.linksA || []
+                        sub.linksA!.push(link)
+                    }
+                    subLinks = subLinks.concat(this.linksA!)
                 }
-                subLinks = subLinks.concat(this.linksA!)
-            }
 
-            if (this.linksB)
-            {
-                const linkBSubs: StarSegment[] = pd.sample(children, this.linksB!.length, true, childWeights)
-                for(let i = 0; i < this.linksB!.length; i++) {
-                    const link: StarLink = this.linksB![i]
-                    const sub = linkBSubs[i]
-                    link.segmentB = Promise.resolve(sub)
-                    sub.linksB = sub.linksB || []
-                    sub.linksB!.push(link)
+                if (this.linksB) {
+                    const linkBSubs: StarSegment[] = pd.sample(children, this.linksB!.length, true, childWeights)
+                    for(let i = 0; i < this.linksB!.length; i++) {
+                        const link: StarLink = this.linksB![i]
+                        const sub = linkBSubs[i]
+                        link.segmentB = Promise.resolve(sub)
+                        sub.linksB = sub.linksB || []
+                        sub.linksB!.push(link)
+                    }
+                    subLinks = subLinks.concat(this.linksB!)
                 }
-                subLinks = subLinks.concat(this.linksB!)
-            }
-            this.linksA = []
-            this.linksB = []
 
-            // Save substitbuted links
-            await Promise.all(subLinks.map(l => linkRepository.save(l)))
+                this.linksA = []
+                this.linksB = []
+
+                // Save substitbuted links
+                await Promise.all(subLinks.map(l => linkRepository.save(l)))
+            }
 
             // Save child segments
             await Promise.all(children.map(s => segmentRepository.save(s)))
@@ -208,17 +221,80 @@ export class StarSegment {
         else
         {
             const starRepository = manager.getCustomRepository(StarSystemRepository)
-            const children: StarSystem[] = []
+            let children: StarSystem[] = []
 
-            for(let i = 0; i < this.expectedStars; i++) {
-                const position = this.generateChildPosition()
-                const newStar = await starRepository.generateStarSystem(position)
-                children.push(newStar)
+            // Generate stars themselves
+            {
+                const childrenP: Promise<StarSystem>[] = []
+                for(let i = 0; i < this.expectedStars; i++) {
+                    const position = this.generateChildPosition()
+                    const newStar = starRepository.generateStarSystem(position, this)
+                    childrenP.push(newStar)
+                }
+                children = await Promise.all(childrenP)
+                this.childrenSystems = Promise.resolve(children)
             }
-            this.childrenSystems = children
+
+            // We want our children connectivity NOT to follow Gauss' distribution
+            const childWeights = pd.rexp(children.length)
+
+            // Generate links between stars
+            {
+                const pairs = this.generateLinks(children, expectedLinks, childWeights, true)
+                const links: StarLink[] = []
+                for (const p of pairs) {
+                    const newLink = linkRepository.create()
+                    newLink.systemA = Promise.resolve(p[0])
+                    newLink.systemB = Promise.resolve(p[1])
+                    p[0].linksA = p[0].linksA || []
+                    p[1].linksB = p[1].linksB || []
+                    p[0].linksA!.push(newLink)
+                    p[1].linksB!.push(newLink)
+                    links.push(newLink)
+                }
+
+                // Save all generated links
+                await Promise.all(links.map(l => linkRepository.save(l)))
+            }
+
+            // Re-delegate all links from parent to children
+            {
+                let subLinks: StarLink[] = []
+                if (this.linksA) {
+                    const linkASubs: StarSystem[] = pd.sample(children, this.linksA!.length, true, childWeights)
+                    for (let i = 0; i < this.linksA!.length; i++) {
+                        const link: StarLink = this.linksA![i]
+                        const sub = linkASubs[i]
+                        link.systemA = Promise.resolve(sub)
+                        sub.linksA = sub.linksA || []
+                        sub.linksA!.push(link)
+                    }
+                    subLinks = subLinks.concat(this.linksA!)
+                }
+
+                if (this.linksB) {
+                    const linkBSubs: StarSystem[] = pd.sample(children, this.linksB!.length, true, childWeights)
+                    for (let i = 0; i < this.linksB!.length; i++) {
+                        const link: StarLink = this.linksB![i]
+                        const sub = linkBSubs[i]
+                        link.systemB = Promise.resolve(sub)
+                        sub.linksB = sub.linksB || []
+                        sub.linksB!.push(link)
+                    }
+                    subLinks = subLinks.concat(this.linksB!)
+                }
+
+                this.linksA = []
+                this.linksB = []
+
+                await Promise.all(subLinks.map(l => linkRepository.save(l)))
+            }
+
+            // Save child stars
+            await Promise.all(children.map(s => starRepository.save(s)))
         }
+
         this.generatedChildren = true
         await segmentRepository.save(this)
-        
   }
 }
