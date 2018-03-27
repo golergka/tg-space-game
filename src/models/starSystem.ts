@@ -3,7 +3,7 @@ import {User} from "./user";
 import { StartPollingOptions } from "node-telegram-bot-api";
 import Coord from "./coord";
 import { StarSegment } from "./starSegment";
-import { StarLink } from "./starLink";
+import { StarLink, StarLinkEdge } from "./starLink";
 const pd = require("probability-distributions")
 
 @Entity()
@@ -19,6 +19,8 @@ class StarSystemProfile {
     @Column()
     expectedNeighbours: number
 }
+
+export type StarLinkDirected = { link: StarLink, direction: StarLinkEdge }
 
 @Entity()
 export class StarSystem {
@@ -75,6 +77,37 @@ export class StarSystem {
         return result
     }
 
+    public allLinks(): StarLinkDirected[]  {
+        let result: StarLinkDirected[] = []
+        if (this.linksA)
+            result = result.concat(this.linksA!.map(l => { 
+                return { link: l, direction: StarLinkEdge.B}
+            }))
+        if (this.linksB)
+            result = result.concat(this.linksB!.map(l => { 
+                return { link: l, direction: StarLinkEdge.A}
+            }))
+        return result
+    }
+
+    public async labelledLinks(): Promise<{[id: string] : StarLinkDirected}> {
+        const result: {[id: string]: StarLinkDirected} = {}
+        const allLinks = this.allLinks()
+        for (const l of allLinks) {
+            const destination = await l.link.system(l.direction)
+            const text = destination ?
+                destination.name :
+                "???"
+            let duplicate = 0
+            let finalText = text
+            while(finalText in result) {
+                duplicate++
+                finalText = text + " (" + duplicate + ")"
+            }
+            result[finalText] = l
+        }
+        return result
+    }
 }
 
 @EntityRepository(StarSystem)

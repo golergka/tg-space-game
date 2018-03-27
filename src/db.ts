@@ -3,6 +3,8 @@ import TelegramBot from "node-telegram-bot-api"
 import {User, UserRepository} from "./models/user"
 import { StarSystemRepository, StarSystem } from "./models/starSystem";
 import Command from "./command";
+import { StarLink, StarLinkEdge } from "./models/starLink";
+import { StarSegment } from "./models/starSegment";
 
 export class Db {
 
@@ -45,16 +47,36 @@ export class Db {
         })
     }
 
-    public getLocation = async (message: TelegramBot.Message): Promise<StarSystem> => {
-        const user = await this.tryGetUser(message)
-        return await user!.system!
-    }
-
     public getContext = async (message: TelegramBot.Message): Promise<CommandContext> => {
         const user = await this.getOrGenerateUser(message)
         return new CommandContext(user)
     }
 
+    public travel = async (userId: number, linkId: number, direction: StarLinkEdge): Promise<void> => {
+        await this.connection.transaction(async (manager: EntityManager): Promise<void> =>  {
+            const linkRepository = manager.getRepository(StarLink)
+            const link: StarLink = (await linkRepository.findOneById(linkId))!
+            let segmentDestination = await link.segment(direction)
+            while (segmentDestination) {
+                await segmentDestination.tryGenerateChildren.apply(segmentDestination)
+                segmentDestination = await link.segment(direction)
+            }
+            const systemDestination = await link.system(direction)!
+
+            const userRepository = manager.getCustomRepository(UserRepository)
+            const user = (await userRepository.findOneById(userId))!
+            const systemOrigin = await user.system!
+
+            await systemOrigin.tryRemoveOccupant(user)
+            await systemDestination.pushOccupant(user)
+            user.system = Promise.resolve(systemDestination)
+
+            const systemRepository = manager.getCustomRepository(StarSystemRepository)
+            await systemRepository.save(systemOrigin)
+            await systemRepository.save(systemDestination)
+            await userRepository.save(user)
+        })
+    }
 }
 
 export class CommandContext {

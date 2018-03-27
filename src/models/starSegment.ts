@@ -296,5 +296,16 @@ export class StarSegment {
 
         this.generatedChildren = true
         await segmentRepository.save(this)
-  }
+    }
+
+    public async generateDownToSystem(): Promise<StarSystem> {
+        if (!this.generatedChildren)
+            await this.tryGenerateChildren.apply(this)
+
+        const segmentChildren = await this.childrenSegments
+        if (segmentChildren)
+            return await segmentChildren[0].generateDownToSystem()
+        else
+            return (await this.childrenSystems!)[0]
+    }
 }

@@ -12,16 +12,25 @@ export default abstract class Command {
         this.db = db
         this.name = name
 
-        const regex = new RegExp("/" + name + "( (.+))*");
+        /*
+        const regex = new RegExp("/" + name + "(?: (.+))*")
         this.bot.onText(regex, async (msg: TelegramBot.Message, match: RegExpExecArray|null) => {
             const context = await db.getContext(msg)
             this.invoke.bind(this)(msg, match, context)
         });
+        */
     }
 
+    public abstract async tryInvoke(
+        msg: TelegramBot.Message, 
+        context: CommandContext
+    ): Promise<boolean>;
+
+    /*
     abstract async invoke(
         msg: TelegramBot.Message, 
         match: RegExpExecArray|null,
         context: CommandContext
     ): Promise<void>;
+    */
 }
